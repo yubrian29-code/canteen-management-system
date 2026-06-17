@@ -1,0 +1,7 @@
+{
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "livePreview.serverRoot": "frontend-canteen",
+  "livePreview.openPreviewTarget": "externalBrowser",
+  "liveServer.settings.root": "/frontend-canteen"
+}

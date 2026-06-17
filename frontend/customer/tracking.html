@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Track Order — Canteen System</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/customer.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar__brand" href="/customer/menu.html">
+      <span class="navbar__brand-icon">🍽️</span>
+      Canteen
+    </a>
+    <ul class="navbar__nav">
+      <li><a href="/customer/menu.html">Menu</a></li>
+      <li><a href="/customer/history.html">My Orders</a></li>
+      <li><a href="/customer/wallet.html">Wallet</a></li>
+      <li><a href="/customer/profile.html">Profile</a></li>
+    </ul>
+    <div class="navbar__actions">
+      <span class="navbar__user" id="nav-user"></span>
+      <button class="btn btn--inverse btn--sm" onclick="clearSession()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page" style="max-width:600px">
+    <div class="page-header">
+      <h1 class="page-title" style="margin:0">Order Tracking</h1>
+      <a href="/customer/history.html" class="btn btn--secondary btn--sm">All Orders</a>
+    </div>
+
+    <div id="content">
+      <div class="spinner"></div>
+    </div>
+  </main>
+
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+    const session = guardPage('CUSTOMER');
+    document.getElementById('nav-user').textContent = session.schoolId;
+
+    const orderId = getParam('orderId');
+    if (!orderId) location.replace('/customer/history.html');
+
+    const TERMINAL = new Set(['PICKED_UP', 'CANCELLED', 'REJECTED', 'ABANDONED']);
+    const STATUS_ORDER = ['ORDERED', 'PREPARING', 'READY_FOR_PICK_UP', 'PICKED_UP'];
+
+    let pollTimer = null;
+
+    function render(data) {
+      const latestStatus = data.orderTrackingStatus.length
+        ? data.orderTrackingStatus[data.orderTrackingStatus.length - 1].status
+        : 'ORDERED';
+
+      const statusMap = {};
+      data.orderTrackingStatus.forEach(s => { statusMap[s.status] = s.timestamp; });
+
+      const timelineHTML = STATUS_ORDER.map(s => {
+        const ts = statusMap[s];
+        const isDone = ts !== undefined;
+        const isCurrent = s === latestStatus && !TERMINAL.has(latestStatus);
+        const cls = isDone
+          ? (isCurrent ? 'timeline-item current' : 'timeline-item done')
+          : 'timeline-item';
+        return `
+          <li class="${cls}">
+            <div class="timeline-item__label">${STATUS_LABELS[s] || s}</div>
+            ${ts ? `<div class="timeline-item__time">${formatDate(ts)}</div>` : ''}
+          </li>`;
+      }).join('');
+
+      const itemsHTML = (data.orderedItems || []).map(i =>
+        `<li>${i.name} × ${i.quantity}</li>`).join('');
+
+      document.getElementById('content').innerHTML = `
+        <div class="card mb-2">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-bold">Order #${data.orderId}</span>
+            ${statusBadgeHTML(latestStatus)}
+          </div>
+          <div class="text-sm text-muted mb-1">Items ordered:</div>
+          <ul style="list-style:disc;padding-left:1.2rem;font-size:.9rem;margin-bottom:1rem">
+            ${itemsHTML}
+          </ul>
+          <ul class="tracking-timeline">
+            ${timelineHTML}
+          </ul>
+          ${TERMINAL.has(latestStatus) ? `
+            <hr class="divider">
+            <a href="/customer/menu.html" class="btn btn--primary btn--sm">Order Again</a>
+          ` : '<div class="text-sm text-muted mt-2">🔄 Auto-refreshing every 10 s…</div>'}
+        </div>
+
+        ${latestStatus === 'ORDERED' ? `
+          <button class="btn btn--danger btn--sm" id="cancel-btn" onclick="cancelOrder()">
+            Cancel Order
+          </button>` : ''}
+      `;
+    }
+
+    async function load() {
+      try {
+        const data = await api.trackOrder(orderId);
+        render(data);
+        const latestStatus = data.orderTrackingStatus.length
+          ? data.orderTrackingStatus[data.orderTrackingStatus.length - 1].status
+          : 'ORDERED';
+        if (TERMINAL.has(latestStatus)) {
+          clearInterval(pollTimer);
+        }
+      } catch (err) {
+        document.getElementById('content').innerHTML =
+          `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    async function cancelOrder() {
+      const btn = document.getElementById('cancel-btn');
+      if (!btn) return;
+      setLoading(btn, true);
+      try {
+        const res = await api.cancelOrder(session.id, orderId);
+        if (res.success === false) {
+          showToast(res.message || 'Cannot cancel order', 'error');
+          setLoading(btn, false);
+        } else {
+          showToast(res.message || 'Order cancelled', 'success');
+          load();
+        }
+      } catch (err) {
+        showToast(err.message || 'Cannot cancel order', 'error');
+        setLoading(btn, false);
+      }
+    }
+
+    load();
+    pollTimer = setInterval(load, 10000);
+  </script>
+</body>
+</html>

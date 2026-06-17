@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order History — Canteen System</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/customer.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar__brand" href="/customer/menu.html">
+      <span class="navbar__brand-icon">🍽️</span>
+      Canteen
+    </a>
+    <ul class="navbar__nav" id="main-nav">
+      <li><a href="/customer/menu.html">Menu</a></li>
+      <li><a href="/customer/history.html" class="active">My Orders</a></li>
+      <li><a href="/customer/wallet.html">Wallet</a></li>
+      <li><a href="/customer/profile.html">Profile</a></li>
+    </ul>
+    <div class="navbar__actions">
+      <span class="navbar__user" id="nav-user"></span>
+      <button class="btn btn--inverse btn--sm" onclick="clearSession()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page" style="max-width:700px">
+    <h1 class="page-title">Order History</h1>
+    <div id="history-list">
+      <div class="spinner"></div>
+    </div>
+  </main>
+
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+    const session = guardPage('CUSTOMER');
+    document.getElementById('nav-user').textContent = session.schoolId;
+
+    async function load() {
+      const container = document.getElementById('history-list');
+      try {
+        const orders = await api.getOrderHistory(session.id);
+        if (!orders || !orders.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state__icon">📋</div>
+              <div class="empty-state__title">No orders yet</div>
+              <a href="/customer/menu.html" class="btn btn--primary mt-2">Order Now</a>
+            </div>`;
+          return;
+        }
+        container.innerHTML = `<div class="history-list">
+          ${orders.slice().reverse().map(o => {
+            const itemSummary = (o.orderedItems || [])
+              .map(i => `${i.name} ×${i.quantity}`).join(', ');
+            const cancellable = o.orderStatus === 'ORDERED';
+            return `
+              <div class="history-card" id="order-card-${o.orderId}">
+                <div class="history-card__header">
+                  <span class="history-card__id">Order #${o.orderId}</span>
+                  ${statusBadgeHTML(o.orderStatus)}
+                </div>
+                ${o.orderStatus === 'CANCELLED' && o.paymentMethod === 'WALLET' ? `
+                <div style="margin-top:.4rem;font-size:.8rem;padding:.3rem .6rem;border-radius:.375rem;display:inline-block;background:#dbeafe;color:#1d4ed8">
+                  ↩ Refund returned to wallet
+                </div>` : ''}
+                <div class="history-card__items">${itemSummary || 'No items'}</div>
+                ${o.remark ? `<div class="text-muted text-sm" style="margin-top:.3rem">📝 ${o.remark}</div>` : ''}
+                <div class="history-card__footer">
+                  <span class="text-muted text-sm">${formatDate(o.orderTime)}</span>
+                  <span class="history-card__amount">${formatCurrency(o.totalAmount)}</span>
+                </div>
+                <div class="mt-1" style="display:flex;gap:.5rem;align-items:center">
+                  <a href="/customer/tracking.html?orderId=${o.orderId}"
+                     class="btn btn--ghost btn--sm">Track →</a>
+                  ${cancellable ? `<button class="btn btn--sm" id="cancel-btn-${o.orderId}"
+                     style="color:#ef4444;border:1px solid #ef4444;background:transparent;border-radius:.375rem;padding:.25rem .75rem;cursor:pointer;font-size:.8rem"
+                     onclick="cancelOrder(${o.orderId}, this)">Cancel</button>` : ''}
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+      } catch (err) {
+        container.innerHTML =
+          `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    async function cancelOrder(orderId, btn) {
+      if (!confirm('Cancel this order?')) return;
+      btn.disabled = true;
+      btn.textContent = 'Cancelling…';
+      try {
+        const res = await api.cancelOrder(session.id, orderId);
+        if (res.isSuccess) {
+          showToast('Order cancelled', 'success');
+          load();
+        } else {
+          showToast(res.message || 'Cannot cancel at this stage', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Cancel';
+        }
+      } catch (err) {
+        showToast(err.message || 'Cancel failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Cancel';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

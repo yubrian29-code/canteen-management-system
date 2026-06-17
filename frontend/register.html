@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register — Canteen System</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/auth.css">
+</head>
+<body class="auth-page">
+  <!-- Left hero panel -->
+  <div class="auth-hero">
+    <div class="auth-hero__content">
+      <div class="auth-hero__icon">🛵</div>
+      <h1 class="auth-hero__title">Join the Canteen</h1>
+      <p class="auth-hero__sub">Create your account and start ordering hot meals from the canteen in seconds.</p>
+      <div class="auth-hero__badges">
+        <span class="auth-hero__badge">🎓 Student</span>
+        <span class="auth-hero__badge">💼 Staff</span>
+        <span class="auth-hero__badge">🔒 Secure</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="auth-panel">
+    <div class="auth-card">
+      <div class="auth-card__logo">
+        <div class="auth-card__logo-icon">🍽️</div>
+        <div class="auth-card__logo-title">Canteen System</div>
+        <div class="auth-card__logo-sub">Create your account</div>
+      </div>
+
+      <h1 class="auth-card__title">Create Account</h1>
+      <p class="auth-card__title-sub">Fill in your details to get started</p>
+
+      <div id="error-msg" class="alert alert--error hidden"></div>
+      <div id="success-msg" class="alert alert--success hidden"></div>
+
+      <form id="register-form">
+        <div class="form-group">
+          <label for="schoolId">School / Staff ID</label>
+          <input type="text" id="schoolId" name="schoolId" placeholder="e.g. S12345" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" name="name" placeholder="Your full name" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="new-password" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label>Account Type</label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="userType" value="STUDENT" checked>
+              🎓 Student
+            </label>
+            <label>
+              <input type="radio" name="userType" value="STAFF">
+              💼 Staff
+            </label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn--primary btn--block btn--lg" id="submit-btn">Create Account</button>
+      </form>
+
+      <p class="auth-card__footer">
+        Already have an account? <a href="/login.html">Sign in</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const errorEl = document.getElementById('error-msg');
+      const successEl = document.getElementById('success-msg');
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+
+      const data = {
+        schoolId: document.getElementById('schoolId').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        password: document.getElementById('password').value,
+        userType: document.querySelector('input[name="userType"]:checked').value,
+      };
+
+      setLoading(btn, true);
+      try {
+        const res = await api.register(data);
+        if (res && res.success === false) throw new Error(res.message || 'Registration failed');
+        successEl.textContent = '✅ Account created! Redirecting to login…';
+        successEl.classList.remove('hidden');
+        setTimeout(() => location.replace('/login.html'), 1500);
+      } catch (err) {
+        errorEl.textContent = err.message || 'Registration failed. Try a different ID.';
+        errorEl.classList.remove('hidden');
+        setLoading(btn, false);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wallet — Canteen System</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/customer.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar__brand" href="/customer/menu.html">
+      <span class="navbar__brand-icon">🍽️</span>
+      Canteen
+    </a>
+    <ul class="navbar__nav" id="main-nav">
+      <li><a href="/customer/menu.html">Menu</a></li>
+      <li><a href="/customer/history.html">My Orders</a></li>
+      <li><a href="/customer/wallet.html" class="active">Wallet</a></li>
+      <li><a href="/customer/profile.html">Profile</a></li>
+    </ul>
+    <div class="navbar__actions">
+      <span class="navbar__user" id="nav-user"></span>
+      <button class="btn btn--inverse btn--sm" onclick="clearSession()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page" style="max-width:500px">
+    <h1 class="page-title">Wallet</h1>
+
+    <div id="wallet-card">
+      <div class="spinner"></div>
+    </div>
+
+    <div class="card" style="margin-top:1.5rem">
+      <h2 style="font-size:.95rem;font-weight:600;margin-bottom:.75rem">Top Up Wallet</h2>
+      <form id="topup-form">
+        <div class="form-group">
+          <label>Amount (HKD)</label>
+          <div class="topup-presets">
+            <button type="button" class="topup-preset-btn" data-amount="20" onclick="selectPreset(20)">HKD 20</button>
+            <button type="button" class="topup-preset-btn" data-amount="50" onclick="selectPreset(50)">HKD 50</button>
+            <button type="button" class="topup-preset-btn" data-amount="100" onclick="selectPreset(100)">HKD 100</button>
+          </div>
+          <input type="number" id="tu-amount" min="1" step="0.01" placeholder="Or enter custom amount…" oninput="clearPreset()">
+        </div>
+        <div class="form-group">
+          <label for="tu-method">Payment Method</label>
+          <select id="tu-method">
+            <option value="CREDIT_CARD">Credit Card</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="tu-ref">Reference ID (optional)</label>
+          <input type="text" id="tu-ref" placeholder="e.g. receipt number">
+        </div>
+        <button type="submit" class="btn btn--primary" id="topup-btn">+ Top Up</button>
+      </form>
+    </div>
+
+    <h2 style="margin-top:2rem;margin-bottom:1rem;font-size:1.1rem;color:var(--color-text)">Transaction History</h2>
+    <div id="transaction-list">
+      <div class="spinner"></div>
+    </div>
+  </main>
+
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+    const session = guardPage('CUSTOMER');
+    document.getElementById('nav-user').textContent = session.schoolId;
+
+    async function loadWallet() {
+      const container = document.getElementById('wallet-card');
+      try {
+        const w = await api.getWallet(session.id);
+        container.innerHTML = `
+          <div class="wallet-balance-card">
+            <div class="wallet-balance-card__label">Available Balance</div>
+            <div class="wallet-balance-card__amount">${formatCurrency(w.balance)}</div>
+            <div class="wallet-balance-card__schoolId">${session.schoolId}</div>
+          </div>`;
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    async function loadTransactions() {
+      const container = document.getElementById('transaction-list');
+      try {
+        const list = await api.getTransactions(session.id);
+        if (!list || list.length === 0) {
+          container.innerHTML = `<div class="empty-state"><div class="empty-state__icon">💳</div><div class="empty-state__title">No transactions yet</div></div>`;
+          return;
+        }
+        const typeLabel   = { TOP_UP: 'Top Up', PURCHASE: 'Purchase', REFUND: 'Refund' };
+        const typeSign    = { TOP_UP: '+', PURCHASE: '-', REFUND: '+' };
+        const typeColor   = { TOP_UP: '#22c55e', PURCHASE: '#ef4444', REFUND: '#3b82f6' };
+        const methodLabel = { WALLET: 'Wallet', CASH: 'Cash', CREDIT_CARD: 'Credit Card' };
+        container.innerHTML = list.map(t => {
+          const sign   = typeSign[t.transactionType]  || '';
+          const color  = typeColor[t.transactionType] || 'inherit';
+          const label  = typeLabel[t.transactionType] || t.transactionType;
+          const method = methodLabel[t.paymentMethod]  || t.paymentMethod || '';
+          const date   = t.createdAt ? new Date(t.createdAt).toLocaleString() : '';
+          return `
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;padding:1rem">
+              <div>
+                <div style="font-weight:600">${label} <span style="font-weight:400;font-size:.8rem;color:var(--color-text-muted)">via ${method}</span></div>
+                <div style="font-size:.8rem;color:var(--color-text-muted)">${date}</div>
+                ${t.orderId ? `<div style="font-size:.75rem;color:var(--color-text-muted)">Order #${t.orderId}</div>` : ''}
+              </div>
+              <div style="font-weight:700;font-size:1.1rem;color:${color}">${sign}${formatCurrency(t.amount)}</div>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    function selectPreset(amount) {
+      document.querySelectorAll('.topup-preset-btn').forEach(b =>
+        b.classList.toggle('topup-preset-btn--active', Number(b.dataset.amount) === amount));
+      document.getElementById('tu-amount').value = amount;
+    }
+
+    function clearPreset() {
+      document.querySelectorAll('.topup-preset-btn').forEach(b => b.classList.remove('topup-preset-btn--active'));
+    }
+
+    document.getElementById('topup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('topup-btn');
+      const amount = parseFloat(document.getElementById('tu-amount').value);
+      if (!amount || amount <= 0) { showToast('Select or enter a valid amount', 'error'); return; }
+      setLoading(btn, true);
+      try {
+        await api.topUp({
+          userId: session.id,
+          amount,
+          paymentMethod: document.getElementById('tu-method').value,
+          referenceId: document.getElementById('tu-ref').value.trim() || null,
+        });
+        showToast(`Top-up of ${formatCurrency(amount)} successful`, 'success');
+        document.getElementById('topup-form').reset();
+        clearPreset();
+        loadWallet();
+        loadTransactions();
+      } catch (err) {
+        showToast(err.message || 'Top-up failed', 'error');
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    loadWallet();
+    loadTransactions();
+  </script>
+</body>
+</html>

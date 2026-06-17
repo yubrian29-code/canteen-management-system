@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — Canteen System</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/auth.css">
+</head>
+<body class="auth-page">
+  <!-- Left hero panel -->
+  <div class="auth-hero">
+    <div class="auth-hero__content">
+      <div class="auth-hero__icon">🍜</div>
+      <h1 class="auth-hero__title">Canteen System</h1>
+      <p class="auth-hero__sub">Order your favourite canteen meals fast, fresh and easy.</p>
+      <div class="auth-hero__badges">
+        <span class="auth-hero__badge">🔥 Hot Dishes</span>
+        <span class="auth-hero__badge">⚡ Quick Pickup</span>
+        <span class="auth-hero__badge">💳 Easy Pay</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="auth-panel">
+    <div class="auth-card">
+      <div class="auth-card__logo">
+        <div class="auth-card__logo-icon">🍽️</div>
+        <div class="auth-card__logo-title">Canteen System</div>
+        <div class="auth-card__logo-sub">Online Ordering Platform</div>
+      </div>
+
+      <h1 class="auth-card__title">Welcome back!</h1>
+      <p class="auth-card__title-sub">Sign in to order your meal today</p>
+
+      <div id="error-msg" class="alert alert--error hidden"></div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="schoolId">School / Staff ID</label>
+          <input type="text" id="schoolId" name="schoolId" placeholder="e.g. S12345" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn--primary btn--block btn--lg" id="submit-btn">Sign In</button>
+      </form>
+
+      <p class="auth-card__footer">
+        Don't have an account? <a href="/register.html">Register here</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/utils.js"></script>
+  <script>
+    if (getSession()) {
+      const s = getSession();
+      location.replace(s.role === 'ADMIN' ? '/admin/dashboard.html' : s.role === 'KITCHEN' ? '/admin/orders.html' : '/customer/menu.html');
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const errorEl = document.getElementById('error-msg');
+      errorEl.classList.add('hidden');
+
+      const schoolId = document.getElementById('schoolId').value.trim();
+      const password = document.getElementById('password').value;
+
+      setLoading(btn, true);
+      try {
+        const res = await api.login(schoolId, password);
+        if (!res.success) throw new Error(res.message || 'Login failed');
+        saveSession(res, password);
+        location.replace(res.role === 'ADMIN' ? '/admin/dashboard.html' : res.role === 'KITCHEN' ? '/admin/orders.html' : '/customer/menu.html');
+      } catch (err) {
+        errorEl.textContent = err.message || 'Invalid credentials';
+        errorEl.classList.remove('hidden');
+        setLoading(btn, false);
+      }
+    });
+  </script>
+</body>
+</html>

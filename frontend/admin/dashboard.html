@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — Admin</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── KPI cards ─────────────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: .75rem;
+      padding: 1.25rem 1.25rem 1rem;
+      display: flex; flex-direction: column; gap: .35rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .kpi-card__top { display: flex; align-items: center; justify-content: space-between; }
+    .kpi-icon {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    }
+    .kpi-icon--pink   { background: #fdf2f8; }
+    .kpi-icon--blue   { background: #e8f4fd; }
+    .kpi-icon--purple { background: #f3e8ff; }
+    .kpi-icon--teal   { background: #e0f7f4; }
+    .kpi-trend { font-size: .78rem; font-weight: 600; display: flex; align-items: center; gap: .2rem; }
+    .kpi-trend--up   { color: #16a34a; }
+    .kpi-trend--down { color: #dc2626; }
+    .kpi-trend--flat { color: #6b7280; }
+    .kpi-value { font-size: 1.7rem; font-weight: 700; color: var(--color-text); line-height: 1.1; }
+    .kpi-label { font-size: .8rem; color: var(--color-muted); }
+
+    /* ── Status counters ────────────────────────────────────────────────── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .status-card {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: .75rem; padding: 1rem 1.25rem;
+      display: flex; align-items: center; gap: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .status-card__icon {
+      width: 40px; height: 40px; border-radius: .5rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.15rem; flex-shrink: 0;
+    }
+    .status-card__icon--yellow { background: #fef9c3; }
+    .status-card__icon--blue   { background: #dbeafe; }
+    .status-card__icon--green  { background: #dcfce7; }
+    .status-card__icon--grey   { background: #f3f4f6; }
+    .status-card__count { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+    .status-card__label { font-size: .8rem; color: var(--color-muted); margin-top: .15rem; }
+
+    /* ── Chart / insight cards ──────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .charts-row--2col { grid-template-columns: 1fr 1fr; }
+    .charts-row--3col { grid-template-columns: 2fr 1fr; }
+    .chart-card {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: .75rem; padding: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .chart-card__header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .chart-card__title { font-weight: 700; font-size: .95rem; }
+    .chart-card__sub { font-size: .78rem; color: var(--color-muted); margin-top: .1rem; }
+
+    /* ── Top dishes ranked list ─────────────────────────────────────────── */
+    .dish-row {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .55rem 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .dish-row:last-child { border-bottom: none; }
+    .dish-rank {
+      width: 24px; text-align: center;
+      font-size: .8rem; font-weight: 700; color: var(--color-muted); flex-shrink: 0;
+    }
+    .dish-rank--gold   { color: #d97706; }
+    .dish-rank--silver { color: #6b7280; }
+    .dish-rank--bronze { color: #92400e; }
+    .dish-bar-wrap { flex: 1; }
+    .dish-name { font-size: .85rem; font-weight: 600; margin-bottom: .25rem; }
+    .dish-bar-track { background: #f3f4f6; border-radius: 999px; height: 8px; overflow: hidden; }
+    .dish-bar-fill  { height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .4s ease; }
+    .dish-count { font-size: .82rem; font-weight: 700; color: var(--color-primary); flex-shrink: 0; min-width: 48px; text-align: right; }
+
+    /* ── Insight stat cards (cancel rate, etc.) ─────────────────────────── */
+    .insight-stat { text-align: center; padding: .75rem 0; }
+    .insight-stat__value { font-size: 2rem; font-weight: 800; color: var(--color-text); line-height: 1; }
+    .insight-stat__label { font-size: .78rem; color: var(--color-muted); margin-top: .25rem; }
+    .insight-stat--good  .insight-stat__value { color: #16a34a; }
+    .insight-stat--warn  .insight-stat__value { color: #d97706; }
+    .insight-stat--bad   .insight-stat__value { color: #dc2626; }
+    .insight-divider { border: none; border-top: 1px solid var(--color-border); margin: .5rem 0; }
+
+    /* ── Recent orders ──────────────────────────────────────────────────── */
+    .recent-card {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: .75rem; padding: 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      margin-bottom: 1rem;
+    }
+    .recent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .recent-header__title { font-weight: 700; font-size: .95rem; }
+    .recent-table { width: 100%; border-collapse: collapse; }
+    .recent-table th {
+      text-align: left; font-size: .75rem; font-weight: 600; color: var(--color-muted);
+      padding: .5rem .75rem; border-bottom: 1px solid var(--color-border);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .recent-table td {
+      padding: .7rem .75rem; font-size: .85rem;
+      border-bottom: 1px solid var(--color-border); vertical-align: middle;
+    }
+    .recent-table tr:last-child td { border-bottom: none; }
+    .ord-status {
+      display: inline-block; padding: .2rem .55rem;
+      border-radius: 999px; font-size: .72rem; font-weight: 600;
+    }
+    .ord-status--ORDERED            { background:#dbeafe; color:#1d4ed8; }
+    .ord-status--PREPARING          { background:#fef9c3; color:#92400e; }
+    .ord-status--READY_FOR_PICK_UP  { background:#d1fae5; color:#065f46; }
+    .ord-status--PICKED_UP          { background:#dcfce7; color:#166534; }
+    .ord-status--CANCELLED          { background:#fee2e2; color:#991b1b; }
+    .ord-status--ABANDONED          { background:#f3f4f6; color:#6b7280; }
+    .ord-status--REJECTED           { background:#fce7f3; color:#9d174d; }
+
+    @media (max-width: 1100px) {
+      .kpi-grid    { grid-template-columns: repeat(2, 1fr); }
+      .status-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-row--2col,
+      .charts-row--3col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .kpi-grid    { grid-template-columns: 1fr; }
+      .status-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar__brand" href="/admin/dashboard.html"><span class="navbar__brand-icon">🍽️</span> Canteen Admin</a>
+    <div class="navbar__actions">
+      <span class="navbar__user" id="nav-user"></span>
+      <button class="btn btn--inverse btn--sm" onclick="clearSession()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="admin-layout">
+    <nav class="admin-sidebar">
+      <div class="admin-sidebar__section">Management</div>
+      <ul class="admin-sidebar__nav">
+        <li><a href="/admin/dashboard.html" class="active">📊 Dashboard</a></li>
+        <li><a href="/admin/menus.html">📋 Menus</a></li>
+        <li><a href="/admin/items.html">🍛 Items</a></li>
+        <li><a href="/admin/orders.html">📦 Orders</a></li>
+        <li><a href="/admin/logs.html">📝 Status Logs</a></li>
+        <li><a href="/admin/settings.html">⚙️ Settings</a></li>
+      </ul>
+    </nav>
+
+    <div class="admin-content">
+      <div class="page-header" style="margin-bottom:1.25rem">
+        <div>
+          <h1 class="page-title" style="margin:0">Dashboard</h1>
+          <div style="font-size:.8rem;color:var(--color-muted);margin-top:.15rem" id="dash-date"></div>
+        </div>
+        <button class="btn btn--secondary btn--sm" onclick="load()">↻ Refresh</button>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card"><div class="spinner"></div></div>
+        <div class="kpi-card"><div class="spinner"></div></div>
+        <div class="kpi-card"><div class="spinner"></div></div>
+        <div class="kpi-card"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Live status counters -->
+      <div class="status-grid" id="status-grid">
+        <div class="status-card"><div class="spinner"></div></div>
+        <div class="status-card"><div class="spinner"></div></div>
+        <div class="status-card"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Top dishes + Payment split -->
+      <div class="charts-row charts-row--3col" style="margin-bottom:1rem">
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div>
+              <div class="chart-card__title">🏆 Most Ordered Dishes</div>
+              <div class="chart-card__sub">All-time top items by quantity sold</div>
+            </div>
+          </div>
+          <div id="top-dishes"><div class="spinner"></div></div>
+        </div>
+
+        <div class="chart-card" style="display:flex;flex-direction:column;gap:.75rem">
+          <div class="chart-card__title">💳 Payment Methods</div>
+          <canvas id="payment-chart" height="160"></canvas>
+          <hr class="insight-divider">
+          <div class="chart-card__title">📉 Order Health</div>
+          <div id="order-health" style="display:flex;gap:.5rem;flex-wrap:wrap"></div>
+        </div>
+      </div>
+
+      <!-- Revenue chart + Peak hours -->
+      <div class="charts-row charts-row--2col" style="margin-bottom:1rem">
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div>
+              <div class="chart-card__title">📈 Daily Revenue</div>
+              <div class="chart-card__sub">Last 30 days (excluding cancelled)</div>
+            </div>
+          </div>
+          <canvas id="revenue-chart" height="140"></canvas>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <div>
+              <div class="chart-card__title">📅 Orders This Week</div>
+              <div class="chart-card__sub">Order count per day — last 7 days</div>
+            </div>
+          </div>
+          <canvas id="week-chart" height="140"></canvas>
+        </div>
+      </div>
+
+      <!-- Recent Orders -->
+      <div class="recent-card">
+        <div class="recent-header">
+          <span class="recent-header__title">Recent Orders</span>
+          <a href="/admin/orders.html" class="btn btn--ghost btn--sm">View All →</a>
+        </div>
+        <div id="recent-orders"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+    const session = guardPage('ADMIN');
+    document.getElementById('nav-user').textContent = session.schoolId;
+    document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-HK', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const PINK    = '#ec4899';
+    const PINK_BG = 'rgba(236,72,153,.12)';
+    const CANCELLED_STATUSES = ['CANCELLED', 'REJECTED', 'ABANDONED'];
+
+    const STATUS_LABEL = {
+      ORDERED: 'Ordered', PREPARING: 'Preparing',
+      READY_FOR_PICK_UP: 'Ready for Pick Up', PICKED_UP: 'Picked Up',
+      CANCELLED: 'Cancelled', ABANDONED: 'Abandoned', REJECTED: 'Rejected',
+    };
+
+    let revenueChart = null;
+    let paymentChart = null;
+    let hoursChart   = null;
+    let allOrders    = [];
+
+    function isToday(dateStr) {
+      return dateStr && new Date(dateStr).toDateString() === new Date().toDateString();
+    }
+    function isYesterday(dateStr) {
+      if (!dateStr) return false;
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      return new Date(dateStr).toDateString() === y.toDateString();
+    }
+    function isPaid(o) { return !CANCELLED_STATUSES.includes(o.orderStatus); }
+
+    function trend(current, previous) {
+      if (previous === 0) return { label: current > 0 ? '+100%' : '—', dir: current > 0 ? 'up' : 'flat' };
+      const pct = ((current - previous) / previous * 100).toFixed(1);
+      return { label: `${pct > 0 ? '+' : ''}${pct}%`, dir: pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat' };
+    }
+
+    /* ── KPI cards ─────────────────────────────────────────────────────── */
+    function renderKPI(orders) {
+      const todayOrders = orders.filter(o => isToday(o.orderTime));
+      const todayPaid   = todayOrders.filter(isPaid);
+      const yestPaid    = orders.filter(o => isYesterday(o.orderTime) && isPaid(o));
+      const todayRev    = todayPaid.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
+      const yestRev     = yestPaid.reduce((s, o)  => s + (Number(o.totalAmount) || 0), 0);
+      const todayAvg    = todayPaid.length ? todayRev / todayPaid.length : 0;
+      const yestAvg     = yestPaid.length  ? yestRev  / yestPaid.length  : 0;
+      const activeNow   = orders.filter(o => ['ORDERED','PREPARING','READY_FOR_PICK_UP'].includes(o.orderStatus)).length;
+      const totalItems  = orders.filter(isPaid).reduce((s, o) =>
+        s + (o.orderedItems || []).reduce((ss, i) => ss + (i.quantity || 1), 0), 0);
+
+      const t1 = trend(todayRev, yestRev);
+      const t2 = trend(todayPaid.length, yestPaid.length);
+      const t4 = trend(todayAvg, yestAvg);
+
+      const kpis = [
+        { icon: '💰', iconCls: 'kpi-icon--pink',   value: formatCurrency(todayRev),  label: "Today's Revenue",      t: t1 },
+        { icon: '🧾', iconCls: 'kpi-icon--blue',   value: todayPaid.length,           label: "Today's Orders",       t: t2 },
+        { icon: '⚡', iconCls: 'kpi-icon--purple',  value: activeNow,                  label: 'Active Orders Now',    t: null },
+        { icon: '🍽️', iconCls: 'kpi-icon--teal',   value: totalItems.toLocaleString(),label: 'Total Portions Sold',  t: null },
+      ];
+
+      document.getElementById('kpi-grid').innerHTML = kpis.map(k => `
+        <div class="kpi-card">
+          <div class="kpi-card__top">
+            <div class="kpi-icon ${k.iconCls}">${k.icon}</div>
+            ${k.t ? `<span class="kpi-trend kpi-trend--${k.t.dir}">${k.t.dir==='up'?'↑':k.t.dir==='down'?'↓':'—'} ${k.t.label} vs yesterday</span>` : ''}
+          </div>
+          <div class="kpi-value">${k.value}</div>
+          <div class="kpi-label">${k.label}</div>
+        </div>`).join('');
+    }
+
+    /* ── Status counters ────────────────────────────────────────────────── */
+    function renderStatus(orders) {
+      const pending   = orders.filter(o => o.orderStatus === 'ORDERED').length;
+      const preparing = orders.filter(o => o.orderStatus === 'PREPARING').length;
+      const ready     = orders.filter(o => o.orderStatus === 'READY_FOR_PICK_UP').length;
+      const abandoned = orders.filter(o => o.orderStatus === 'ABANDONED' && isToday(o.orderTime)).length;
+      document.getElementById('status-grid').innerHTML = `
+        <div class="status-card">
+          <div class="status-card__icon status-card__icon--yellow">⏳</div>
+          <div><div class="status-card__count">${pending}</div><div class="status-card__label">Pending Orders</div></div>
+        </div>
+        <div class="status-card">
+          <div class="status-card__icon status-card__icon--blue">🍳</div>
+          <div><div class="status-card__count">${preparing}</div><div class="status-card__label">Preparing</div></div>
+        </div>
+        <div class="status-card">
+          <div class="status-card__icon status-card__icon--green">✅</div>
+          <div><div class="status-card__count">${ready}</div><div class="status-card__label">Ready for Pick Up</div></div>
+        </div>
+        <div class="status-card">
+          <div class="status-card__icon status-card__icon--grey">🚶</div>
+          <div>
+            <div class="status-card__count" style="${abandoned > 0 ? 'color:#dc2626' : ''}">${abandoned}</div>
+            <div class="status-card__label">Abandoned Today</div>
+          </div>
+        </div>`;
+    }
+
+    /* ── Top dishes ─────────────────────────────────────────────────────── */
+    function renderTopDishes(orders) {
+      const counts = {};
+      orders.filter(isPaid).forEach(o => {
+        (o.orderedItems || []).forEach(item => {
+          counts[item.name] = (counts[item.name] || 0) + (item.quantity || 1);
+        });
+      });
+      const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const max    = ranked[0]?.[1] || 1;
+      const medals = ['🥇', '🥈', '🥉'];
+
+      if (!ranked.length) {
+        document.getElementById('top-dishes').innerHTML =
+          '<p class="text-muted text-sm">No completed orders yet.</p>';
+        return;
+      }
+
+      document.getElementById('top-dishes').innerHTML = ranked.map(([name, qty], i) => {
+        const rankCls = i === 0 ? 'dish-rank--gold' : i === 1 ? 'dish-rank--silver' : i === 2 ? 'dish-rank--bronze' : '';
+        const rankLabel = i < 3 ? medals[i] : `#${i + 1}`;
+        const pct = ((qty / max) * 100).toFixed(1);
+        return `
+          <div class="dish-row">
+            <div class="dish-rank ${rankCls}">${rankLabel}</div>
+            <div class="dish-bar-wrap">
+              <div class="dish-name">${name}</div>
+              <div class="dish-bar-track">
+                <div class="dish-bar-fill" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <div class="dish-count">${qty} sold</div>
+          </div>`;
+      }).join('');
+    }
+
+    /* ── Payment method donut ───────────────────────────────────────────── */
+    function renderPaymentChart(orders) {
+      const paid   = orders.filter(isPaid);
+      const wallet = paid.filter(o => o.paymentMethod === 'WALLET').length;
+      const cash   = paid.filter(o => o.paymentMethod === 'CASH').length;
+      const other  = paid.length - wallet - cash;
+
+      const ctx = document.getElementById('payment-chart').getContext('2d');
+      if (paymentChart) paymentChart.destroy();
+      paymentChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Wallet', 'Cash', 'Other'],
+          datasets: [{
+            data: [wallet, cash, other],
+            backgroundColor: ['#ec4899', '#f9a8d4', '#fce7f3'],
+            borderWidth: 2,
+            borderColor: '#fff',
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '65%',
+          plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct = total ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                  return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /* ── Order health stats ─────────────────────────────────────────────── */
+    function renderOrderHealth(orders) {
+      const total      = orders.length;
+      const cancelled  = orders.filter(o => o.orderStatus === 'CANCELLED' || o.orderStatus === 'REJECTED').length;
+      const abandoned  = orders.filter(o => o.orderStatus === 'ABANDONED').length;
+      const completed  = orders.filter(o => o.orderStatus === 'PICKED_UP').length;
+      const cancelRate = total ? ((cancelled  / total) * 100).toFixed(1) : 0;
+      const abanRate   = total ? ((abandoned  / total) * 100).toFixed(1) : 0;
+      const compRate   = total ? ((completed  / total) * 100).toFixed(1) : 0;
+
+      const cancelCls = cancelRate > 20 ? 'bad' : cancelRate > 10 ? 'warn' : 'good';
+      const abanCls   = abanRate   > 15 ? 'bad' : abanRate   > 5  ? 'warn' : 'good';
+
+      document.getElementById('order-health').innerHTML = `
+        <div class="insight-stat insight-stat--${cancelCls}" style="flex:1">
+          <div class="insight-stat__value">${cancelRate}%</div>
+          <div class="insight-stat__label">Cancelled (${cancelled})</div>
+        </div>
+        <div class="insight-stat insight-stat--${abanCls}" style="flex:1">
+          <div class="insight-stat__value">${abanRate}%</div>
+          <div class="insight-stat__label">Abandoned (${abandoned})</div>
+        </div>
+        <div class="insight-stat insight-stat--good" style="flex:1">
+          <div class="insight-stat__value">${compRate}%</div>
+          <div class="insight-stat__label">Completed (${completed})</div>
+        </div>`;
+    }
+
+    /* ── Revenue chart ──────────────────────────────────────────────────── */
+    function renderRevenueChart(orders) {
+      const ctx    = document.getElementById('revenue-chart').getContext('2d');
+      const now    = new Date();
+      const labels = [], data = [];
+      for (let i = 29; i >= 0; i--) {
+        const day = new Date(now);
+        day.setDate(now.getDate() - i);
+        day.setHours(0, 0, 0, 0);
+        labels.push(day.toLocaleDateString('en-HK', { month: 'short', day: 'numeric' }));
+        data.push(orders
+          .filter(o => o.orderTime && isPaid(o) && new Date(o.orderTime).toDateString() === day.toDateString())
+          .reduce((s, o) => s + (Number(o.totalAmount) || 0), 0));
+      }
+      if (revenueChart) revenueChart.destroy();
+      revenueChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Revenue (HKD)',
+            data,
+            fill: true,
+            borderColor: PINK,
+            backgroundColor: PINK_BG,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: PINK,
+            tension: 0.4,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
+            y: {
+              beginAtZero: true,
+              ticks: { font: { size: 11 }, callback: v => 'HKD ' + v.toFixed(0) },
+              grid: { color: '#f0f0f0' },
+            }
+          }
+        }
+      });
+    }
+
+    /* ── Peak hours chart ───────────────────────────────────────────────── */
+    function renderWeekChart(orders) {
+      const now    = new Date();
+      const labels = [];
+      const data   = [];
+      const DAY    = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      for (let i = 6; i >= 0; i--) {
+        const day = new Date(now);
+        day.setDate(now.getDate() - i);
+        day.setHours(0, 0, 0, 0);
+        const isToday_ = i === 0;
+        labels.push(isToday_ ? 'Today' : DAY[day.getDay()]);
+        data.push(orders.filter(o =>
+          o.orderTime && new Date(o.orderTime).toDateString() === day.toDateString()
+        ).length);
+      }
+      const max = Math.max(...data, 1);
+      const ctx = document.getElementById('week-chart').getContext('2d');
+      if (hoursChart) hoursChart.destroy();
+      hoursChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Orders',
+            data,
+            backgroundColor: data.map((v, i) =>
+              i === 6
+                ? PINK                                            // today — solid pink
+                : `rgba(236,72,153,${0.2 + 0.6 * (v / max)})`   // past days — intensity by volume
+            ),
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.raw} order${ctx.raw !== 1 ? 's' : ''}` } },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+            y: {
+              beginAtZero: true,
+              ticks: { font: { size: 11 }, stepSize: 1, precision: 0 },
+              grid: { color: '#f0f0f0' },
+            }
+          }
+        }
+      });
+    }
+
+    /* ── Recent orders table ────────────────────────────────────────────── */
+    function renderRecentOrders(orders) {
+      const recent = orders.slice().sort((a, b) => new Date(b.orderTime) - new Date(a.orderTime)).slice(0, 8);
+      if (!recent.length) {
+        document.getElementById('recent-orders').innerHTML =
+          '<p class="text-muted text-sm" style="padding:.5rem">No orders yet.</p>';
+        return;
+      }
+      document.getElementById('recent-orders').innerHTML = `
+        <table class="recent-table">
+          <thead><tr>
+            <th>Order</th><th>Customer</th><th>Items</th><th>Amount</th><th>Payment</th><th>Status</th><th>Time</th>
+          </tr></thead>
+          <tbody>${recent.map(o => {
+            const items = (o.orderedItems || []).map(i => `${i.name} ×${i.quantity}`).join(', ');
+            const time  = o.orderTime ? new Date(o.orderTime).toLocaleTimeString('en-HK',{hour:'2-digit',minute:'2-digit'}) : '—';
+            const pmLabel = { WALLET: '💳 Wallet', CASH: '💵 Cash' }[o.paymentMethod] || o.paymentMethod || '—';
+            return `
+              <tr>
+                <td><strong>#${o.orderId}</strong></td>
+                <td>${o.customerName || o.schoolId || '—'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-muted);font-size:.8rem">${items || '—'}</td>
+                <td><strong>${formatCurrency(o.totalAmount)}</strong></td>
+                <td style="font-size:.8rem;color:var(--color-muted)">${pmLabel}</td>
+                <td><span class="ord-status ord-status--${o.orderStatus}">${STATUS_LABEL[o.orderStatus] || o.orderStatus}</span></td>
+                <td style="color:var(--color-muted);font-size:.8rem">${time}</td>
+              </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+    }
+
+    async function load() {
+      try {
+        allOrders = await api.getAllOrders();
+        renderKPI(allOrders);
+        renderStatus(allOrders);
+        renderTopDishes(allOrders);
+        renderPaymentChart(allOrders);
+        renderOrderHealth(allOrders);
+        renderRevenueChart(allOrders);
+        renderWeekChart(allOrders);
+        renderRecentOrders(allOrders);
+      } catch (err) {
+        document.getElementById('kpi-grid').innerHTML =
+          `<div class="kpi-card" style="grid-column:1/-1"><span class="text-muted">${err.message}</span></div>`;
+      }
+    }
+
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

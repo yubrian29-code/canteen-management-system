@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Menu — Canteen System</title>
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/customer.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar__brand" href="/customer/menu.html">
+      <span class="navbar__brand-icon">🍽️</span>
+      Canteen
+    </a>
+    <ul class="navbar__nav" id="main-nav">
+      <li><a href="/customer/menu.html" class="active">Menu</a></li>
+      <li><a href="/customer/history.html">My Orders</a></li>
+      <li><a href="/customer/wallet.html">Wallet</a></li>
+      <li><a href="/customer/profile.html">Profile</a></li>
+    </ul>
+    <div class="navbar__actions">
+      <span class="navbar__user" id="nav-user"></span>
+      <button class="btn btn--inverse btn--sm" onclick="clearSession()">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page page--wide">
+    <!-- Hero welcome — full width -->
+    <div class="menu-hero">
+      <div>
+        <div class="menu-hero__greeting">Good day 👋</div>
+        <div class="menu-hero__title">What are you having today?</div>
+        <div class="menu-hero__sub">Fresh canteen meals, order ahead &amp; skip the queue</div>
+      </div>
+    </div>
+
+    <!-- Order window banner — full width -->
+    <div id="cutoff-banner" class="cutoff-banner hidden">
+      <span>⏰</span>
+      <span id="cutoff-message"></span>
+      <span style="margin-left:auto;opacity:.7" id="cutoff-countdown"></span>
+    </div>
+
+    <!-- Split-panel: LEFT menu content + RIGHT cart sidebar -->
+    <div class="menu-layout">
+
+      <!-- LEFT: Category tabs + items grid -->
+      <div class="menu-content">
+        <div class="section-heading">Today's Menu</div>
+        <div id="menu-tabs" class="menu-tabs"></div>
+        <div id="items-grid" class="items-grid">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Persistent cart sidebar -->
+      <aside class="cart-sidebar" id="cart-sidebar">
+        <div class="cart-sidebar__header">
+          <span>🛒 Your Order</span>
+          <button class="cart-sidebar__close-btn" onclick="closeMobileCart()" aria-label="Close cart">✕</button>
+        </div>
+        <div class="cart-sidebar__body" id="cart-body"></div>
+        <div class="cart-sidebar__footer">
+          <div class="cart-total-row">
+            <span>Total</span>
+            <span class="cart-total-row__amount" id="cart-total">HKD 0.00</span>
+          </div>
+          <button class="btn btn--primary btn--block btn--lg" id="checkout-btn" onclick="goCheckout()">
+            Proceed to Checkout →
+          </button>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Mobile-only cart FAB (hidden on desktop) -->
+  <button class="cart-fab" id="cart-fab" onclick="openMobileCart()">
+    🛒
+    <span class="cart-fab__badge hidden" id="cart-count">0</span>
+  </button>
+
+  <!-- Mobile cart backdrop -->
+  <div class="cart-overlay" id="cart-overlay" onclick="closeMobileCart()"></div>
+
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/utils.js"></script>
+  <script>
+    const session = guardPage('CUSTOMER');
+    document.getElementById('nav-user').textContent = session.schoolId;
+
+    let menus = [];
+    let activeMenuId = null;
+    let orderingClosed = false;
+
+    async function loadCutOff() {
+      try {
+        const w = await api.getOrderWindow();
+        if (!w || !w.openTime || !w.closeTime) return;
+
+        const banner  = document.getElementById('cutoff-banner');
+        const msgEl   = document.getElementById('cutoff-message');
+        const countEl = document.getElementById('cutoff-countdown');
+        banner.classList.remove('hidden');
+
+        const toMs = (timeStr) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          const d = new Date();
+          return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0).getTime();
+        };
+        const openMs  = toMs(w.openTime);
+        const closeMs = toMs(w.closeTime);
+
+        function tick() {
+          const now = Date.now();
+          if (now < openMs) {
+            if (!orderingClosed) {
+              orderingClosed = true;
+              banner.classList.add('cutoff-banner--closed');
+              const menu = menus.find(m => (m.menuId || m.id) === activeMenuId);
+              if (menu) renderItems(menu.items || []);
+              document.getElementById('checkout-btn').disabled = true;
+            }
+            msgEl.textContent = `Ordering opens at ${w.openTime.substring(0, 5)}`;
+            const diff = openMs - now;
+            countEl.textContent = `Opens in ${Math.floor(diff/60000)}m ${Math.floor((diff%60000)/1000)}s`;
+          } else if (now < closeMs) {
+            if (orderingClosed) {
+              orderingClosed = false;
+              banner.classList.remove('cutoff-banner--closed');
+              const menu = menus.find(m => (m.menuId || m.id) === activeMenuId);
+              if (menu) renderItems(menu.items || []);
+              document.getElementById('checkout-btn').disabled = false;
+            }
+            msgEl.textContent = `Ordering closes at ${w.closeTime.substring(0, 5)}`;
+            const diff = closeMs - now;
+            countEl.textContent = `${Math.floor(diff/60000)}m ${Math.floor((diff%60000)/1000)}s left`;
+          } else {
+            if (!orderingClosed) {
+              orderingClosed = true;
+              banner.classList.add('cutoff-banner--closed');
+              const menu = menus.find(m => (m.menuId || m.id) === activeMenuId);
+              if (menu) renderItems(menu.items || []);
+              document.getElementById('checkout-btn').disabled = true;
+            }
+            msgEl.textContent = 'Ordering closed for today';
+            countEl.textContent = 'See you tomorrow!';
+          }
+        }
+        tick();
+        setInterval(tick, 1000);
+      } catch {}
+    }
+
+    async function loadMenus() {
+      try {
+        const data = await api.getMenus();
+        menus = Array.isArray(data) ? data.filter(m => m.isActive !== false) : [];
+        renderTabs();
+        if (menus.length) selectMenu(menus[0].menuId || menus[0].id);
+        else document.getElementById('items-grid').innerHTML =
+          '<div class="empty-state"><div class="empty-state__icon">🍽️</div><div class="empty-state__title">No menus available today</div></div>';
+      } catch (err) {
+        document.getElementById('items-grid').innerHTML =
+          `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    function renderTabs() {
+      const tabsEl = document.getElementById('menu-tabs');
+      const menuHtml = menus.map(m => {
+        const id = m.menuId || m.id;
+        return `<button class="menu-tab" data-id="${id}" onclick="selectMenu(${id})">${m.menuName || m.name}</button>`;
+      }).join('');
+      tabsEl.innerHTML =
+        `<button class="menu-tab menu-tab--popular" data-id="popular" onclick="selectPopular()">🔥 Popular</button>` +
+        menuHtml;
+    }
+
+    function selectMenu(menuId) {
+      activeMenuId = menuId;
+      document.querySelectorAll('.menu-tab').forEach(t => {
+        t.classList.toggle('active', Number(t.dataset.id) === menuId);
+      });
+      const menu = menus.find(m => (m.menuId || m.id) === menuId);
+      renderItems(menu ? (menu.items || []) : []);
+    }
+
+    async function selectPopular() {
+      activeMenuId = 'popular';
+      document.querySelectorAll('.menu-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.id === 'popular');
+      });
+      const grid = document.getElementById('items-grid');
+      grid.innerHTML = '<div class="spinner"></div>';
+      try {
+        const items = await api.getPopularItems(10);
+        renderPopularItems(items);
+      } catch (err) {
+        grid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__title">${err.message}</div></div>`;
+      }
+    }
+
+    function renderPopularItems(items) {
+      const grid = document.getElementById('items-grid');
+      if (!items.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="empty-state__icon">🔥</div><div class="empty-state__title">No popular items yet</div></div>';
+        return;
+      }
+      const MEDALS = ['🥇', '🥈', '🥉'];
+      grid.innerHTML = items.map((item, idx) => {
+        const rank = idx + 1;
+        const rankLabel = rank <= 3 ? MEDALS[rank - 1] : `#${rank}`;
+        const ordersLabel = item.totalOrders > 0
+          ? `🔥 ${item.totalOrders} order${item.totalOrders !== 1 ? 's' : ''}`
+          : '✨ Trending';
+        const imgHtml = item.imageUrl
+          ? `<img class="item-card__img" src="${item.imageUrl}" alt="${item.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const placeholderHtml = `<div class="item-card__img-placeholder" ${item.imageUrl ? 'style="display:none"' : ''}>🍛</div>`;
+        const addBtn = orderingClosed
+          ? `<button class="btn-add" disabled title="Ordering closed">+</button>`
+          : `<button class="btn-add" onclick="addToCart(${item.itemId}, '${item.name.replace(/'/g,"\\'")}', ${item.price})">+</button>`;
+        return `
+          <div class="item-card">
+            <div class="item-card__body">
+              <div class="item-card__name">${item.name}</div>
+              <div class="item-card__price">${formatCurrency(item.price)}</div>
+              <div class="item-card__desc">${item.description || ''}</div>
+              <div class="item-card__orders-badge">${ordersLabel}</div>
+            </div>
+            <div class="item-card__img-wrap">
+              ${imgHtml}${placeholderHtml}
+              <span class="item-card__badge-rank">${rankLabel}</span>
+              ${addBtn}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderItems(items) {
+      const grid = document.getElementById('items-grid');
+      const visible = items.filter(i => i.isVisible !== false);
+      if (!visible.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="empty-state__icon">🍽️</div><div class="empty-state__title">No items in this menu</div></div>';
+        return;
+      }
+      grid.innerHTML = visible.map(item => {
+        const id = item.itemId || item.id;
+        const outOfStock = item.quantity != null && item.quantity === 0;
+        const lowStock   = item.quantity != null && item.quantity > 0 && item.quantity <= 5;
+
+        const imgHtml = item.imageUrl
+          ? `<img class="item-card__img" src="${item.imageUrl}" alt="${item.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const placeholderHtml = `<div class="item-card__img-placeholder" ${item.imageUrl ? 'style="display:none"' : ''}>🍛</div>`;
+        const oosBadge = outOfStock ? `<span class="item-card__badge-oos">Sold Out</span>` : '';
+
+        let addBtn;
+        if (orderingClosed) {
+          addBtn = `<button class="btn-add" disabled title="Ordering closed">+</button>`;
+        } else if (outOfStock) {
+          addBtn = `<button class="btn-add" disabled title="Sold out">+</button>`;
+        } else {
+          addBtn = `<button class="btn-add" onclick="addToCart(${id}, '${item.name.replace(/'/g, "\\'")}', ${item.price})">+</button>`;
+        }
+
+        const stockHtml = outOfStock
+          ? `<div class="item-card__stock-out">Out of stock</div>`
+          : lowStock
+            ? `<div class="item-card__stock-low">Only ${item.quantity} left!</div>`
+            : '';
+
+        return `
+          <div class="item-card">
+            <div class="item-card__body">
+              <div class="item-card__name">${item.name}</div>
+              <div class="item-card__price">${formatCurrency(item.price)}</div>
+              <div class="item-card__desc">${item.description || ''}</div>
+              ${stockHtml}
+            </div>
+            <div class="item-card__img-wrap">
+              ${imgHtml}${placeholderHtml}${oosBadge}
+              ${addBtn}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function getStockQty(itemId) {
+      for (const menu of menus) {
+        const item = (menu.items || []).find(i => (i.itemId || i.id) === itemId);
+        if (item) return item.quantity ?? null;
+      }
+      return null;
+    }
+
+    function addToCart(itemId, name, price) {
+      if (orderingClosed) { showToast('Ordering is closed for today', 'error'); return; }
+      const stockQty = getStockQty(itemId);
+      if (stockQty != null) {
+        const cartQty = cartStore.get().find(i => i.itemId === itemId)?.quantity || 0;
+        if (cartQty + 1 > stockQty) {
+          showToast(stockQty === 0 ? 'Out of stock' : `Only ${stockQty} available`, 'error');
+          return;
+        }
+      }
+      cartStore.add({ itemId, name, price });
+      updateCartUI();
+      showToast(`${name} added 🎉`, 'success');
+    }
+
+    function updateCartUI() {
+      const count = cartStore.count();
+      const countEl = document.getElementById('cart-count');
+      countEl.textContent = count;
+      countEl.classList.toggle('hidden', count === 0);
+      renderCartBody();
+    }
+
+    function renderCartBody() {
+      const items = cartStore.get();
+      const body = document.getElementById('cart-body');
+      if (!items.length) {
+        body.innerHTML = `
+          <div class="cart-empty">
+            <div class="cart-empty__icon">🛒</div>
+            <div class="cart-empty__title">Your cart is empty</div>
+            <p class="cart-empty__sub">Add items from the menu</p>
+          </div>`;
+        document.getElementById('checkout-btn').disabled = true;
+        document.getElementById('cart-total').textContent = 'HKD 0.00';
+        return;
+      }
+      document.getElementById('checkout-btn').disabled = orderingClosed;
+      body.innerHTML = items.map(i => {
+        const stockQty = getStockQty(i.itemId);
+        const plusDisabled = stockQty != null && i.quantity >= stockQty ? ' disabled' : '';
+        const subtotal = formatCurrency(i.price * i.quantity);
+        return `
+        <div class="cart-item">
+          <div class="cart-item__info">
+            <div class="cart-item__name">${i.name}</div>
+            <div class="cart-item__subtotal">${subtotal}</div>
+          </div>
+          <div class="cart-item__controls">
+            <button class="qty-btn" onclick="changeQty(${i.itemId}, ${i.quantity - 1})">−</button>
+            <span class="qty-value">${i.quantity}</span>
+            <button class="qty-btn" onclick="changeQty(${i.itemId}, ${i.quantity + 1})"${plusDisabled}>+</button>
+          </div>
+        </div>`;
+      }).join('');
+      document.getElementById('cart-total').textContent = formatCurrency(cartStore.total());
+    }
+
+    function changeQty(itemId, qty) {
+      const current = cartStore.get().find(i => i.itemId === itemId)?.quantity || 0;
+      if (qty > current) {
+        const stockQty = getStockQty(itemId);
+        if (stockQty != null && qty > stockQty) {
+          showToast(`Only ${stockQty} available`, 'error');
+          return;
+        }
+      }
+      cartStore.updateQty(itemId, qty);
+      updateCartUI();
+    }
+
+    function openMobileCart() {
+      document.getElementById('cart-sidebar').classList.add('mobile-open');
+      document.getElementById('cart-overlay').classList.add('open');
+    }
+    function closeMobileCart() {
+      document.getElementById('cart-sidebar').classList.remove('mobile-open');
+      document.getElementById('cart-overlay').classList.remove('open');
+    }
+    function goCheckout() {
+      if (orderingClosed) { showToast('Ordering is closed for today', 'error'); return; }
+      if (!cartStore.count()) return;
+      location.href = '/customer/checkout.html';
+    }
+
+    loadCutOff();
+    loadMenus();
+    updateCartUI();
+  </script>
+</body>
+</html>
