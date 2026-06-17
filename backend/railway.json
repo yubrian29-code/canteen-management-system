@@ -1,7 +1,16 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "./mvnw -B -DskipTests clean package -Pproduction"
+    "builder": "NIXPACKS",
+    "nixpacksPlan": {
+      "phases": {
+        "build": {
+          "cmds": [
+            "./mvnw -B -DskipTests clean package -Pproduction"
+          ]
+        }
+      }
+    }
   },
   "deploy": {
     "startCommand": "java -Dserver.port=$PORT $JAVA_OPTS -jar target/*.jar",
