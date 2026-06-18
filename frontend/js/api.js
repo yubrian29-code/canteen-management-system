@@ -1,7 +1,7 @@
 // Full-path API client — paths match Spring Boot controller mappings exactly.
 // Most controllers are under /api/v1. ItemController has no class-level prefix.
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://canteen-management-system-production-612f.up.railway.app';
 
 async function request(method, path, body, params) {
   const url = new URL(path, API_BASE);
