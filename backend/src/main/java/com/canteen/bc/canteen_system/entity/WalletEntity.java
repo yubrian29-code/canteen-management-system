@@ -1,23 +1,17 @@
 package com.canteen.bc.canteen_system.entity;
 
 import java.math.BigDecimal;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "wallets")
-@Data
+@Getter // 💡 修正：拆開用 Getter / Setter，唔好用 @Data
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -30,10 +24,16 @@ public class WalletEntity {
     @Column(name = "balance", nullable = false, precision = 10, scale = 2)
     private BigDecimal balance;
 
-
-    // ! Foreign key
-
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private UserEntity user;
+    
+    // 💡 手動重寫 toString，排除掉 user，避免 StackOverflow
+    @Override
+    public String toString() {
+        return "WalletEntity{" +
+                "id=" + id +
+                ", balance=" + balance +
+                '}';
+    }
 }
